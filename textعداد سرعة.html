@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#101820">
+<title>عداد السرعة GPS</title>
+<style>
+:root{color-scheme:dark;--bg:#101820;--panel:#192631;--muted:#9fb0bc;--lime:#b7f34a;--line:#2b3d49}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 50% 10%,#263b47 0,#101820 52%);color:#f5f8fa;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;display:grid;place-items:center;padding:18px}
+main{width:min(100%,440px)}.brand{display:flex;align-items:center;justify-content:space-between;margin:0 4px 18px}.brand strong{font-size:18px}.pill{font-size:12px;color:var(--lime);border:1px solid #506b2b;border-radius:30px;padding:6px 10px}
+.speedbox{background:linear-gradient(160deg,#1d303b,#14212a);border:1px solid var(--line);border-radius:28px;padding:28px 20px 24px;text-align:center;box-shadow:0 20px 60px #0006}
+.label{color:var(--muted);font-size:14px}.speed{font-size:clamp(76px,23vw,112px);font-weight:800;line-height:1.15;letter-spacing:-5px;color:var(--lime);font-variant-numeric:tabular-nums;margin:12px 0 0}.unit{font-size:19px;color:#dce6eb;font-weight:600}
+.gauge{height:8px;background:#31434d;border-radius:20px;margin:26px 5px 8px;overflow:hidden}.gauge span{display:block;height:100%;width:0;background:linear-gradient(90deg,#82c72e,var(--lime));border-radius:20px;transition:width .4s}
+.status{min-height:24px;color:var(--muted);font-size:13px;margin-top:14px}
+.actions{display:flex;gap:10px;margin-top:18px}button{border:0;border-radius:15px;padding:15px 12px;font:700 15px inherit;cursor:pointer;flex:1}#start{background:var(--lime);color:#17220d}#stop{background:#30424d;color:#fff}button:disabled{opacity:.4;cursor:not-allowed}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.stat{background:#192631;border:1px solid var(--line);border-radius:16px;padding:15px}.stat small{display:block;color:var(--muted);margin-bottom:7px}.stat b{font-size:19px;font-variant-numeric:tabular-nums}
+.note{font-size:12px;color:var(--muted);line-height:1.8;margin:16px 5px 0}.note strong{color:#e7eef2}
+</style>
+</head>
+<body>
+<main>
+  <div class="brand"><strong>عداد السرعة الحقيقي</strong><span class="pill">GPS LIVE</span></div>
+  <section class="speedbox">
+    <div class="label">سرعتك الحالية</div>
+    <div class="speed" id="speed">0</div>
+    <div class="unit">كم/ساعة</div>
+    <div class="gauge"><span id="bar"></span></div>
+    <div class="status" id="status">اضغط «بدء القياس» واسمح بالوصول للموقع</div>
+    <div class="actions">
+      <button id="start">بدء القياس</button>
+      <button id="stop" disabled>إيقاف</button>
+    </div>
+  </section>
+  <section class="stats">
+    <div class="stat"><small>أعلى سرعة مسجلة</small><b><span id="max">0</span> كم/س</b></div>
+    <div class="stat"><small>دقة GPS التقريبية</small><b id="accuracy">—</b></div>
+  </section>
+  <p class="note"><strong>كيف يعمل؟</strong> يقرأ سرعة GPS من الهاتف ويحوّلها إلى كم/ساعة، ولا يعرض أرقاماً عشوائية. قد تتأخر القراءة أو تتذبذب حسب استقبال الأقمار الصناعية. يلزم اتصال آمن HTTPS وإذن الموقع. استخدمه وأنت ثابت أو كمرافق، ولا تمسك الهاتف أثناء قيادة أي مركبة.</p>
+</main>
+<script>
+(() => {
+ const $=id=>document.getElementById(id);
+ let watchId=null, highest=0;
+ const showStatus=t=>$('status').textContent=t;
+ function stop(){
+   if(watchId!==null) navigator.geolocation.clearWatch(watchId);
+   watchId=null; $('start').disabled=false; $('stop').disabled=true;
+   showStatus('تم إيقاف القياس.');
+ }
+ $('start').addEventListener('click',()=>{
+   if(!('geolocation' in navigator)){showStatus('هذا المتصفح لا يدعم تحديد الموقع.');return;}
+   if(!window.isSecureContext){showStatus('يلزم فتح الموقع عبر HTTPS أو localhost حتى يعمل GPS.');return;}
+   if(watchId!==null)return;
+   $('start').disabled=true;$('stop').disabled=false;
+   showStatus('جارٍ انتظار إشارة GPS...');
+   watchId=navigator.geolocation.watchPosition(pos=>{
+     const c=pos.coords;
+     $('accuracy').textContent=Math.round(c.accuracy)+' م';
+     if(c.speed===null || !Number.isFinite(c.speed)){
+       showStatus('وصل الموقع، لكن GPS لم يحدد السرعة بعد. تحرك بشكل طبيعي في مكان آمن وانتظر.');
+       return;
+     }
+     const kmh=Math.max(0,c.speed*3.6);
+     $('speed').textContent=kmh.toFixed(1);
+     highest=Math.max(highest,kmh);
+     $('max').textContent=highest.toFixed(1);
+     $('bar').style.width=Math.min(100,kmh/2)+'%';
+     showStatus('قياس مباشر من GPS • آخر تحديث: '+new Date().toLocaleTimeString('ar'));
+   },err=>{
+     const messages={1:'تم رفض إذن الموقع. اسمح للموقع بالوصول إلى موقعك من إعدادات المتصفح.',2:'إشارة الموقع غير متاحة حالياً. جرّب مكاناً مفتوحاً.',3:'انتهت مهلة GPS. حاول مجدداً.'};
+     showStatus(messages[err.code]||'تعذر قراءة GPS.');
+     stop();
+   },{enableHighAccuracy:true,maximumAge:0,timeout:20000});
+ });
+ $('stop').addEventListener('click',stop);
+})();
+</script>
+</body>
+</html>
